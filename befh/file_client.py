@@ -3,6 +3,9 @@ from befh.util import Logger
 import threading
 import os
 import csv
+from datetime import datetime
+import shlex
+import subprocess
 
 class FileClient(DatabaseClient):
     """
@@ -18,14 +21,16 @@ class FileClient(DatabaseClient):
         SMALLER = 5
         SMALLER_OR_EQUAL = 6
 
-    def __init__(self, dir=os.getcwd()):
+    def __init__(self, dir=os.getcwd(),
+                 compress=True):
         """
         Constructor
         """
         DatabaseClient.__init__(self)
         self.lock = threading.Lock()
         self.file_mapping = dict()
-
+        self.compress = compress
+        self.date = datetime.utcnow()
         if dir is None or dir == '':
             raise Exception("FileClient does not accept empty directory.")
 
@@ -52,19 +57,26 @@ class FileClient(DatabaseClient):
         :param types: Type array
         :param is_ifnotexists: Create table if not exists keyword
         """
-        file_path = os.path.join(self.file_directory, table + ".csv")
-        print(file_path)
+        file_path = os.path.join(self.file_directory, self.date.strftime(table) + ".csv")
+
         columns = [e.split(' ')[0] for e in columns]
         if len(columns) != len(types):
             return False
-
+        current_date = datetime.utcnow()
+        if current_date.day != self.date.day:
+            if os.path.exists(file_path):
+                command = "gzip " + file_path
+                subprocess.Popen(shlex.split(command))
+            self.date = current_date
+            file_path = os.path.join(self.file_directory,
+                                     self.date.strftime(table) + ".csv")
         self.lock.acquire()
         if os.path.isfile(file_path):
-            Logger.info(self.__class__.__name__, "File (%s) has been created already." % file_path)
+            Logger.info(self.__class__.__name__,
+                        "File (%s) has been created already.", file_path)
         else:
             with open(file_path, 'w+') as csvfile:
                 csvfile.write(','.join(["\"" + e + "\"" for e in columns])+'\n')
-
         self.lock.release()
         return True
     
@@ -94,7 +106,7 @@ class FileClient(DatabaseClient):
         self.lock.release()
 
         if not ret:
-            raise Exception("File (%s) has not been created.")
+            raise IOError("File (%s) has not been created.")
 
         return True
 
