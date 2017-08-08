@@ -6,6 +6,7 @@ import csv
 from datetime import datetime
 import shlex
 import subprocess
+import platform
 
 class FileClient(DatabaseClient):
     """
@@ -65,7 +66,11 @@ class FileClient(DatabaseClient):
         current_date = datetime.utcnow()
         if current_date.day != self.date.day:
             if os.path.exists(file_path):
-                command = "gzip " + file_path
+                if platform.system() == "Windows":
+                    compression_command = "gzip.exe "
+                else:
+                    compression_command = "gzip "
+                command = compression_command + file_path
                 subprocess.Popen(shlex.split(command))
             self.date = current_date
             file_path = os.path.join(self.file_directory,
